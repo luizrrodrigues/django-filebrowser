@@ -139,16 +139,6 @@
         {% if fileobject.filetype == "Image" %}
         <fieldset class="grp-module grp-collapse grp-open">
             <h2 class="grp-collapse-handler">{% trans "Image Versions" %}</h2>
-            {% if settings_var.ADMIN_THUMBNAIL %}
-            <div class="grp-row">
-                <div class="l-2c-fluid l-d-4">
-                    <div class="c-1"><label>{% trans "Thumbnail" %}</label></div>
-                    <div class="c-2">
-                        <img src="{% version fileobject.path settings_var.ADMIN_THUMBNAIL %}" title="{% trans 'View Image' %}" />
-                    </div>
-                </div>
-            </div>
-            {% endif %}
             {% if settings_var.ADMIN_VERSIONS %}
                 {% for version in settings_var.ADMIN_VERSIONS %}
                     {% version fileobject version as image_version %}
