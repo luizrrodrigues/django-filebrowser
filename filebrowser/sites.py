@@ -4,9 +4,12 @@ import os
 import re
 from time import gmtime, strftime, localtime, time
 
+from PIL import Image
+
 from django import forms
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
+from django.conf import settings
 from django.core.files.storage import DefaultStorage, default_storage, FileSystemStorage
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
 from django.core.urlresolvers import reverse, get_urlconf, get_resolver
@@ -28,7 +31,7 @@ from filebrowser.storage import FileSystemStorageMixin
 from filebrowser.templatetags.fb_tags import query_helper
 from filebrowser.utils import convert_filename
 from filebrowser.settings import (DIRECTORY, EXTENSIONS, SELECT_FORMATS, ADMIN_VERSIONS, ADMIN_THUMBNAIL, MAX_UPLOAD_SIZE, NORMALIZE_FILENAME,
-                                  CONVERT_FILENAME, SEARCH_TRAVERSE, EXCLUDE, VERSIONS, VERSIONS_BASEDIR, EXTENSION_LIST, DEFAULT_SORTING_BY, DEFAULT_SORTING_ORDER,
+                                  CONVERT_FILENAME, SEARCH_TRAVERSE, EXCLUDE, VERSIONS, VERSIONS_BASEDIR, VERSION_QUALITY, EXTENSION_LIST, DEFAULT_SORTING_BY, DEFAULT_SORTING_ORDER,
                                   LIST_PER_PAGE, OVERWRITE_EXISTING, DEFAULT_PERMISSIONS, UPLOAD_TEMPDIR)
 
 try:
@@ -207,6 +210,7 @@ class FileBrowserSite(object):
             url(r'^delete/$', file_exists(self, path_exists(self, filebrowser_view(self.delete))), name="fb_delete"),
             url(r'^detail/$', file_exists(self, path_exists(self, filebrowser_view(self.detail))), name="fb_detail"),
             url(r'^version/$', file_exists(self, path_exists(self, filebrowser_view(self.version))), name="fb_version"),
+            url(r'^crop/$', file_exists(self, path_exists(self, filebrowser_view(self.crop))), name="fb_crop"),
             url(r'^upload_file/$', staff_member_required(csrf_exempt(self._upload_file)), name="fb_do_upload"),
         ]
         return urlpatterns
@@ -263,6 +267,7 @@ class FileBrowserSite(object):
         "filebrowser.site URLs"
         return self.get_urls(), self.app_name, self.name
 
+    @never_cache
     def browse(self, request):
         "Browse Files/Directories."
         filter_re = []
@@ -518,6 +523,110 @@ class FileBrowserSite(object):
             'query': query,
             'settings_var': get_settings_var(directory=self.directory),
             'filebrowser_site': self
+        })
+
+    def _get_editable_versions(self, fileobject):
+        """
+        Returns the version names that can be cropped.
+        """
+
+        if hasattr(settings, 'FILEBROWSER_CROP_VERSIONS'):
+            return settings.FILEBROWSER_CROP_VERSIONS
+
+        return ADMIN_VERSIONS
+
+    def _do_crop(self, im, x=None, x2=None, y=None, y2=None, width=None, height=None):
+        im = im.crop((x, y, x2, y2))
+        x, y = [float(v) for v in im.size]
+        if width:
+            r = width / x
+        elif height:
+            r = height / y
+        im = im.resize((int(x*r), int(y*r)), resample=Image.ANTIALIAS)
+        return im
+
+    def _save_crop(self, fileobject, version=None, **size_args):
+        from tempfile import NamedTemporaryFile
+
+        org_path = fileobject.path
+
+        tmpfile = NamedTemporaryFile()
+        try:
+            f = self.storage.open(org_path)
+            im = Image.open(f)
+            version_path = fileobject.version_path(version)
+            root, ext = os.path.splitext(version_path)
+            size_args.update({
+                'width' : settings.FILEBROWSER_VERSIONS[version].get('width'),
+                'height' : settings.FILEBROWSER_VERSIONS[version].get('height')
+            })
+
+            im = self._do_crop(im, **size_args)
+            try:
+                im.save(tmpfile, format=Image.EXTENSION[ext], quality=VERSION_QUALITY,
+                            optimize=(ext != '.gif'))
+            except IOError:
+                im.save(tmpfile, format=Image.EXTENSION[ext], quality=VERSION_QUALITY)
+
+            # Remove the old version, if there's any
+            if version_path != self.storage.get_available_name(version_path):
+                self.storage.delete(version_path)
+            self.storage.save(version_path, tmpfile)
+        finally:
+            tmpfile.close()
+            try:
+                f.close()
+            except:
+                pass
+
+    def crop(self, request):
+        """
+        Crop view.
+        """
+        from filebrowser.forms import ImageCropDataForm
+        query = request.GET
+        if not query.get('filename'):
+            raise Http404
+
+        path = u'%s' % os.path.join(self.directory, query.get('dir', ''))
+        fileobject = FileObject(os.path.join(path, query.get('filename', '')), site=self)
+        versions = self._get_editable_versions(fileobject)
+
+        if not versions:
+            raise Http404
+
+        version = versions[0]
+        if request.GET.get('version') and request.GET.get('version') in versions:
+            version = request.GET.get('version')
+
+        if request.POST:
+            version = request.POST.get('version')
+            form = ImageCropDataForm(request.POST)
+            if form.is_valid():
+                if version in versions:
+                   self._save_crop(fileobject, **form.cleaned_data)
+                qs = request.GET.copy()
+                qs['version'] = version
+                path = '%s?%s' % (request.path, qs.urlencode())
+                if "_continue" in request.POST:
+                    redirect_url = path
+                else:
+                    redirect_url = reverse("filebrowser:fb_browse", current_app=self.name) + query_helper(query, "", "filename")
+                return HttpResponseRedirect(redirect_url)
+        else:
+            form = ImageCropDataForm(initial={'version' : version})
+
+        request.current_app = self.name
+        return render(request, 'filebrowser/crop.html', {
+            'fileobject': fileobject,
+            'query': query,
+            'title': u'%s' % fileobject.filename,
+            'breadcrumbs': get_breadcrumbs(query, query.get('dir', '')),
+            'breadcrumbs_title': u'%s' % fileobject.filename,
+            'filebrowser_site': self,
+            'form' : form,
+            'editable_versions' : versions,
+            'version' : version
         })
 
     def _upload_file(self, request):

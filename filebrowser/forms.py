@@ -78,3 +78,14 @@ class ChangeForm(forms.Form):
             elif self.site.storage.isfile(os.path.join(self.path, convert_filename(self.cleaned_data['name']))) and os.path.join(self.path, convert_filename(self.cleaned_data['name'])) != self.fileobject.path:
                 raise forms.ValidationError(_(u'The File already exists.'))
         return convert_filename(self.cleaned_data['name'])
+
+
+class ImageCropDataForm(forms.Form):
+    """
+    Form for crop coords
+    """
+    version = forms.CharField(max_length=255, widget=forms.HiddenInput)
+    x = forms.IntegerField(widget=forms.HiddenInput, min_value=0)
+    y = forms.IntegerField(widget=forms.HiddenInput, min_value=0)
+    x2 = forms.IntegerField(widget=forms.HiddenInput, min_value=0)
+    y2 = forms.IntegerField(widget=forms.HiddenInput, min_value=0)

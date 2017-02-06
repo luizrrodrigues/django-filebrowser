@@ -1,0 +1,144 @@
+{% extends "filebrowser/version.html" %}
+
+<!-- LOADING -->
+{% load i18n admin_static fb_tags fb_versions %}
+
+<!-- STYLESHEETS -->
+{% block stylesheets %}
+    {{ block.super }}
+    <!-- JCrop -->
+    <link rel="stylesheet" type="text/css" href="{% static "filebrowser/css/JCrop/jquery.Jcrop.css" %}" />
+{% endblock %}
+
+<!-- JAVASCRIPTS -->
+{% block javascripts %}
+    {{ block.super }}
+
+    <!-- JCrop -->
+    <script language="javascript" type="text/javascript" src="{% static "filebrowser/js/JCrop/jquery.min.js" %}"></script>
+    <script language="javascript" type="text/javascript" src="{% static "filebrowser/js/JCrop/jquery.Jcrop.js" %}"></script>
+    <script language="javascript" type="text/javascript" src="{% static "filebrowser/js/image_crop.js" %}"></script>
+
+    <script language='javascript'>
+        (function($) {
+		    $(document).ready(function() {
+                var versions = {
+                    {% for version in editable_versions %}
+                        '{{ version }}' : {
+                            {% version fileobject version as image_version %}
+                            {% version_setting version %}
+                            'name' : '{{ version_setting.verbose_name }}',
+                            'width' : {% if version_setting.width %}'{{ version_setting.width }}'{% else %}null{% endif %},
+                            'height' : {% if version_setting.height %}'{{ version_setting.height }}'{% else %}null{% endif %},
+                            'url' : '{{ image_version.url }}'
+                        }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                }
+
+                function change_version() {
+                    destroy_jcrop();
+                    var val = $('select#version_selector').val();
+                    var obj = versions[val];
+                    var html = '<strong>'+obj.name+'</strong><br/>';
+                    if (obj.width != null) {
+                        html = html+'{% trans "Width" %}: '+obj.width+'</br>';
+                    }
+                    if (obj.height != null) {
+                        html = html+'{% trans "Height" %}: '+obj.height;
+                    }
+                    $('#cropped').css({
+                        width: 'auto',
+                        height: 'auto',
+                        display: 'block'
+                    });
+                    $('#cropped').html('<img id="cropped_image" src="'+obj.url+'?v='+randomString(5)+'" />');
+                    initCropFor(val, 'original', 'cropped_image', '_form', obj.width, obj.height);
+                    $('#version_description').html(html);
+                }
+
+                $("select#version_selector").change(change_version);
+                $("#original").load(function() {
+			        change_version();
+                });
+		    });
+    	})(django.jQuery);
+    </script>
+
+    {{ media }}
+{% endblock %}
+
+{% block breadcrumbs %}{% include "filebrowser/include/breadcrumbs.html" %}{% endblock %}
+
+<!-- CONTENT -->
+{% block content %}
+<div id="changelist" class="container-full">
+    <fieldset class="grp-module grp-collapse grp-open" id="fieldset_edit">
+        <h2>{% trans "Crop" %}</h2>
+        <div class="grp-row {% if form.custom_action.errors %}grp-errors{% endif %}">
+            <div class="version_selector_bar">
+	            <label for="version_selector">Image version:</label>
+	            <select id="version_selector">
+                    {% for v in editable_versions %}
+                        {% version_setting v %}
+			            <option value="{{ v }}"{% if version == v %} SELECTED{% endif %}>{{ version_setting.verbose_name }}</option>
+                    {% endfor %}
+	            </select>
+                <div class="c-2">
+                    <p class="grp-help">{% trans "Select a version to select a new crop area." %}</p>
+                </div>
+            </div>
+        </div>
+    </fieldset>
+
+    <div class="module changelist-results">
+        <table cellspacing="0">
+            <thead>
+                <tr>
+
+                <!-- Filename/Dimensions  -->
+                <th width="10%">{% trans 'Name' %}</th>
+
+                <!-- JCrop -->
+                <th>{% trans 'Original Image' %}</th>
+
+                <!-- Version -->
+                <th>{% trans 'Image Version' %}</th>
+
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+
+                <!-- Filename / Dimensions  -->
+                <td>
+                    <div id="version_description"></div>
+                </td>
+
+                 <!-- Original Image (JCrop) -->
+                <td>
+                    <img src='{{fileobject.url}}' id='original' />
+                </td>
+
+                <!-- Version -->
+                <td><div style='overflow: hidden;' id='cropped'><img src="" id='cropped_image'/></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <form method='POST' action='{% query_string "" "filter_date,filter_type,q,p" %}'>
+            <div id='_form' style='display:hidden'>
+                {% csrf_token %}
+                {{ form }}
+            </div>
+            <footer class="grp-module grp-submit-row grp-fixed-footer">
+                <header style="display:none"><h1>Submit Options</h1></header>
+                <ul>
+                    <li><input type="submit" value="{% trans 'Save' %}" class="grp-button grp-default" /></li>
+                    <li><input type="submit" value="{% trans 'Save and continue editing' %}" class="grp-button" name="_continue" /></li>
+                </ul>
+            </footer>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
