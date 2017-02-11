@@ -1,4 +1,4 @@
-Django FileBrowser
+Django FileBrowser w/ JCrop
 ==================
 .. image:: https://api.travis-ci.org/sehmaschine/django-filebrowser.svg
     :target: https://travis-ci.org/sehmaschine/django-filebrowser
