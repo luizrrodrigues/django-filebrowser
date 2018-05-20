@@ -583,11 +583,8 @@ class FileBrowserSite(object):
         """
         Crop view.
         """
-        from filebrowser.forms import ImageCropDataForm
+        from filebrowser.forms import ChangeForm
         query = request.GET
-        if not query.get('filename'):
-            raise Http404
-
         path = u'%s' % os.path.join(self.directory, query.get('dir', ''))
         fileobject = FileObject(os.path.join(path, query.get('filename', '')), site=self)
         versions = self._get_editable_versions(fileobject)
