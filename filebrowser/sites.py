@@ -583,7 +583,7 @@ class FileBrowserSite(object):
         """
         Crop view.
         """
-        from filebrowser.forms import ChangeForm
+        from filebrowser.forms import ImageCropDataForm
         query = request.GET
         path = u'%s' % os.path.join(self.directory, query.get('dir', ''))
         fileobject = FileObject(os.path.join(path, query.get('filename', '')), site=self)
