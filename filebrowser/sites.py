@@ -14,7 +14,7 @@ from django.core.files.storage import DefaultStorage, default_storage, FileSyste
 from django.core.paginator import Paginator, InvalidPage, EmptyPage
 from django.urls import reverse, get_urlconf, get_resolver
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
-from django.shortcuts import render, HttpResponse
+from django.shortcuts import render, HttpResponse, Http404
 from django.template import RequestContext as Context
 from django.utils.translation import ugettext as _
 from django.views.decorators.cache import never_cache
